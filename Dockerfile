@@ -10,8 +10,16 @@ COPY . .
 RUN make install
 
 ############# gardener-extension-os-gardenlinux
-FROM gcr.io/distroless/static-debian11:nonroot AS gardener-extension-os-gardenlinux
+FROM gcr.io/distroless/static-debian12:nonroot AS gardener-extension-os-gardenlinux
 WORKDIR /
 
 COPY --from=builder /go/bin/gardener-extension-os-gardenlinux /gardener-extension-os-gardenlinux
 ENTRYPOINT ["/gardener-extension-os-gardenlinux"]
+
+
+############# gardener-extension-admission-os-gardenlinux
+FROM gcr.io/distroless/static-debian12:nonroot AS gardener-extension-admission-os-sgardenlinux
+WORKDIR /
+
+COPY --from=builder /go/bin/gardener-extension-admission-os-gardenlinux /gardener-extension-admission-os-gardenlinux
+ENTRYPOINT ["/gardener-extension-admission-os-gardenlinux"]
