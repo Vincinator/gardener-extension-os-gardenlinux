@@ -95,5 +95,5 @@ func (s *shoot) validateShoot(_ context.Context, shoot *core.Shoot) error {
 }
 
 func isSupportedMachineImage(machineImageName string) bool {
-	return machineImageName == memoryone.OSTypememoryonegardenlinux
+	return machineImageName == memoryone.OSTypeMemoryOneGardenLinux
 }

@@ -18,7 +18,7 @@ ENTRYPOINT ["/gardener-extension-os-gardenlinux"]
 
 
 ############# gardener-extension-admission-os-gardenlinux
-FROM gcr.io/distroless/static-debian12:nonroot AS gardener-extension-admission-os-sgardenlinux
+FROM gcr.io/distroless/static-debian12:nonroot AS gardener-extension-admission-os-gardenlinux
 WORKDIR /
 
 COPY --from=builder /go/bin/gardener-extension-admission-os-gardenlinux /gardener-extension-admission-os-gardenlinux

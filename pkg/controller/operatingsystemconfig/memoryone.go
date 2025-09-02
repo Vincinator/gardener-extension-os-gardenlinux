@@ -10,8 +10,8 @@ import (
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 
-	memoryonechost "github.com/gardener/gardener-extension-os-suse-chost/pkg/apis/memoryonechost/v1alpha1"
-	"github.com/gardener/gardener-extension-os-suse-chost/pkg/memoryone"
+	memoryonegardenlinux "github.com/gardener/gardener-extension-os-gardenlinux/pkg/apis/memoryonegardenlinux/v1alpha1"
+	"github.com/gardener/gardener-extension-os-gardenlinux/pkg/memoryone"
 )
 
 const (
@@ -42,7 +42,7 @@ Content-Type: text/x-shellscript
 	return out, nil
 }
 
-func vsmpConfigString(config *memoryonechost.OperatingSystemConfiguration) string {
+func vsmpConfigString(config *memoryonegardenlinux.OperatingSystemConfiguration) string {
 	var vsmpConfiguration map[string]string
 	var configStringBuilder strings.Builder
 
