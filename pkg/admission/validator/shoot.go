@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gardener/gardener-extension-os-gardenlinux/pkg/memoryone"
 	"github.com/gardener/gardener/extensions/pkg/util"
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
 	"github.com/gardener/gardener/pkg/apis/core"
@@ -22,6 +21,7 @@ import (
 
 	memoryonev1alpha1 "github.com/gardener/gardener-extension-os-gardenlinux/pkg/apis/memoryonegardenlinux/v1alpha1"
 	memoryonegardenlinuxValidation "github.com/gardener/gardener-extension-os-gardenlinux/pkg/apis/memoryonegardenlinux/validation"
+	"github.com/gardener/gardener-extension-os-gardenlinux/pkg/memoryone"
 )
 
 // NewShootValidator returns a new instance of a shoot validator.
