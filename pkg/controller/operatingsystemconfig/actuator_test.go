@@ -17,7 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+		metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	runtimeutils "k8s.io/apimachinery/pkg/util/runtime"
@@ -26,10 +26,10 @@ import (
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	memoryonev1alpha1 "github.com/gardener/gardener-extension-os-gardenlinux/pkg/apis/memoryonegardenlinux/v1alpha1"
+		memoryonev1alpha1 "github.com/gardener/gardener-extension-os-gardenlinux/pkg/apis/memoryonegardenlinux/v1alpha1"
 	. "github.com/gardener/gardener-extension-os-gardenlinux/pkg/controller/operatingsystemconfig"
-	"github.com/gardener/gardener-extension-os-gardenlinux/pkg/memoryone"
 	"github.com/gardener/gardener-extension-os-gardenlinux/pkg/gardenlinux"
+	"github.com/gardener/gardener-extension-os-gardenlinux/pkg/memoryone"
 )
 
 var codec runtime.Codec
@@ -39,6 +39,7 @@ func init() {
 	runtimeutils.Must(memoryonev1alpha1.AddToScheme(scheme))
 	codec = serializer.NewCodecFactory(scheme, serializer.EnableStrict).LegacyCodec(memoryonev1alpha1.SchemeGroupVersion)
 }
+
 
 var _ = Describe("Actuator", func() {
 	var (
@@ -69,21 +70,63 @@ var _ = Describe("Actuator", func() {
 	})
 
 	When("purpose is 'provision'", func() {
+		expectedUserData := `#!/bin/bash
+if [ -f "/var/lib/osc/provision-osc-applied" ]; then
+  echo "Provision OSC already applied, exiting..."
+  exit 0
+fi
 
-		When("OS type is 'suse-chost'", func() {
+if [ ! -s /etc/containerd/config.toml ]; then
+  mkdir -p /etc/containerd/
+  containerd config default > /etc/containerd/config.toml
+  chmod 0644 /etc/containerd/config.toml
+fi
+
+mkdir -p /etc/systemd/system/containerd.service.d
+cat <<EOF > /etc/systemd/system/containerd.service.d/11-exec_config.conf
+[Service]
+ExecStart=
+ExecStart=/usr/bin/containerd --config=/etc/containerd/config.toml
+EOF
+chmod 0644 /etc/systemd/system/containerd.service.d/11-exec_config.conf
+
+mkdir -p "/some"
+
+cat << EOF | base64 -d > "/some/file"
+YmFy
+EOF
+
+
+cat << EOF | base64 -d > "/etc/systemd/system/some-unit"
+Zm9v
+EOF
+grep -sq "^nfsd$" /etc/modules || echo "nfsd" >>/etc/modules
+modprobe nfsd
+nslookup $(hostname) || systemctl restart systemd-networkd
+
+systemctl daemon-reload
+systemctl enable containerd && systemctl restart containerd
+systemctl enable 'some-unit' && systemctl restart --no-block 'some-unit'
+
+
+mkdir -p /var/lib/osc
+touch /var/lib/osc/provision-osc-applied
+`
+
+		When("OS type is 'gardenlinux'", func() {
 			Describe("#Reconcile", func() {
 				It("should not return an error", func() {
-					_ , extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
+					userData, extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
 					Expect(err).NotTo(HaveOccurred())
 
+					Expect(string(userData)).To(Equal(expectedUserData))
 					Expect(extensionUnits).To(BeEmpty())
 					Expect(extensionFiles).To(BeEmpty())
 					Expect(inplaceUpdateStatus).To(BeNil())
 				})
 			})
 		})
-
-		When("OS type is 'memoryone-chost'", func() {
+			When("OS type is 'memoryone-chost'", func() {
 			var (
 				memoryOneConfiguration memoryonev1alpha1.OperatingSystemConfiguration
 			)
@@ -91,7 +134,7 @@ var _ = Describe("Actuator", func() {
 			BeforeEach(func() {
 				memoryOneConfiguration = memoryonev1alpha1.OperatingSystemConfiguration{
 					TypeMeta: metav1.TypeMeta{
-						APIVersion: "memoryone-gartdenlinux.os.extensions.gardener.cloud/v1alpha1",
+						APIVersion: "memoryone-chost.os.extensions.gardener.cloud/v1alpha1",
 						Kind:       "OperatingSystemConfiguration",
 					},
 				}
@@ -106,12 +149,13 @@ var _ = Describe("Actuator", func() {
 					userData, extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
 					Expect(err).NotTo(HaveOccurred())
 
-					vSmpConfig, _:= decodeVsmpUserData(string(userData))
+					vSmpConfig, decodedUserData := decodeVsmpUserData(string(userData))
 
 					Expect(vSmpConfig).To(BeEquivalentTo(map[string]string{
 						"mem_topology":  "2",
 						"system_memory": "6x",
 					}))
+					Expect(decodedUserData).To(Equal(expectedUserData))
 					Expect(extensionUnits).To(BeEmpty())
 					Expect(extensionFiles).To(BeEmpty())
 					Expect(inplaceUpdateStatus).To(BeNil())
@@ -125,12 +169,13 @@ var _ = Describe("Actuator", func() {
 					userData, extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
 					Expect(err).NotTo(HaveOccurred())
 
-					vSmpConfig, _:= decodeVsmpUserData(string(userData))
+					vSmpConfig, decodedUserData := decodeVsmpUserData(string(userData))
 
 					Expect(vSmpConfig).To(BeEquivalentTo(map[string]string{
 						"mem_topology":  "4",
 						"system_memory": "8x",
 					}))
+					Expect(decodedUserData).To(Equal(expectedUserData))
 
 					Expect(extensionUnits).To(BeEmpty())
 					Expect(extensionFiles).To(BeEmpty())
@@ -145,12 +190,13 @@ var _ = Describe("Actuator", func() {
 					userData, extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
 					Expect(err).NotTo(HaveOccurred())
 
-					vSmpConfig,  _:= decodeVsmpUserData(string(userData))
+					vSmpConfig, decodedUserData := decodeVsmpUserData(string(userData))
 
 					Expect(vSmpConfig).To(BeEquivalentTo(map[string]string{
 						"mem_topology":  "4; foo=bar",
 						"system_memory": "8x",
 					}))
+					Expect(decodedUserData).To(Equal(expectedUserData))
 
 					Expect(extensionUnits).To(BeEmpty())
 					Expect(extensionFiles).To(BeEmpty())
@@ -170,7 +216,7 @@ var _ = Describe("Actuator", func() {
 					userData, extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
 					Expect(err).NotTo(HaveOccurred())
 
-					vSmpConfig, _:= decodeVsmpUserData(string(userData))
+					vSmpConfig, decodedUserData := decodeVsmpUserData(string(userData))
 
 					Expect(vSmpConfig).To(BeEquivalentTo(map[string]string{
 						"mem_topology":  "2",
@@ -178,6 +224,7 @@ var _ = Describe("Actuator", func() {
 						"foo":           "bar",
 						"abc":           "xyz",
 					}))
+					Expect(decodedUserData).To(Equal(expectedUserData))
 
 					Expect(extensionUnits).To(BeEmpty())
 					Expect(extensionFiles).To(BeEmpty())
@@ -195,7 +242,7 @@ var _ = Describe("Actuator", func() {
 					userData, extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
 					Expect(err).NotTo(HaveOccurred())
 
-					vSmpConfig,  _ := decodeVsmpUserData(string(userData))
+					vSmpConfig, decodedUserData := decodeVsmpUserData(string(userData))
 
 					Expect(vSmpConfig).To(BeEquivalentTo(map[string]string{
 						"mem_topology":  "2",
@@ -203,6 +250,7 @@ var _ = Describe("Actuator", func() {
 						"foo":           "bar",
 						"abc":           "xyz",
 					}))
+					Expect(decodedUserData).To(Equal(expectedUserData))
 
 					Expect(extensionUnits).To(BeEmpty())
 					Expect(extensionFiles).To(BeEmpty())
@@ -222,12 +270,13 @@ var _ = Describe("Actuator", func() {
 					userData, extensionUnits, extensionFiles, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
 					Expect(err).NotTo(HaveOccurred())
 
-					vSmpConfig,  _ := decodeVsmpUserData(string(userData))
+					vSmpConfig, decodedUserData := decodeVsmpUserData(string(userData))
 
 					Expect(vSmpConfig).To(BeEquivalentTo(map[string]string{
 						"mem_topology":  "3",
 						"system_memory": "7x",
 					}))
+					Expect(decodedUserData).To(Equal(expectedUserData))
 
 					Expect(extensionUnits).To(BeEmpty())
 					Expect(extensionFiles).To(BeEmpty())
@@ -235,6 +284,8 @@ var _ = Describe("Actuator", func() {
 				})
 			})
 		})
+
+
 	})
 
 	When("purpose is 'reconcile'", func() {
@@ -243,33 +294,53 @@ var _ = Describe("Actuator", func() {
 		})
 
 		Describe("#Reconcile", func() {
-			It("should not return an error", func() {
-				userData, extensionUnits, _, _, err := actuator.Reconcile(ctx, log, osc)
+			It("should not return usersdata for purpose reconcile", func() {
+				userData, _, _, _, err := actuator.Reconcile(ctx, log, osc)
 				Expect(err).NotTo(HaveOccurred())
-
 				Expect(userData).To(BeEmpty())
-				Expect(extensionUnits).To(BeEmpty())
 			})
 
-			It("should deploy a sysctl file to configure IPv6 router advertisements", func() {
-				_, _, extensionFiles, _, err := actuator.Reconcile(ctx, log, osc)
+			Context("In-Place Updates", func() {
+				It("should return InPlaceUpdatesStatus", func() {
+					osc.Spec.InPlaceUpdates = &extensionsv1alpha1.InPlaceUpdates{
+						OperatingSystemVersion: "1.0.0-inplace",
+					}
+
+					_, _, _, inplaceUpdateStatus, err := actuator.Reconcile(ctx, log, osc)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(inplaceUpdateStatus).To(Equal(&extensionsv1alpha1.InPlaceUpdatesStatus{
+						OSUpdate: &extensionsv1alpha1.OSUpdate{
+							Command: "/opt/gardener/bin/inplace-update.sh",
+							Args:    []string{"1.0.0"},
+						},
+					}))
+				})
+			})
+
+			It("should add one empty additional unit for containerd", func() {
+				_, units, files, _, err := actuator.Reconcile(ctx, log, osc)
 				Expect(err).NotTo(HaveOccurred())
-
-				sysctl_content := `# enables IPv6 router advertisements on all interfaces even when ip forwarding for IPv6 is enabled
-net.ipv6.conf.all.accept_ra = 2
-
-# specifically enable IPv6 router advertisements on the first ethernet interface (eth0 for net.ifnames=0)
-net.ipv6.conf.eth0.accept_ra = 2
-`
-
-				Expect(extensionFiles).To(HaveLen(1))
-				Expect(extensionFiles[0].Path).To(Equal("/etc/sysctl.d/98-enable-ipv6-ra.conf"))
-				Expect(extensionFiles[0].Permissions).To(Equal(ptr.To(uint32(0644))))
-				Expect(extensionFiles[0].Content.Inline.Data).To(Equal(sysctl_content))
+				Expect(units).To(HaveLen(1))
+				Expect(units).To(ContainElement(
+					extensionsv1alpha1.Unit{
+						Name: "containerd.service",
+						DropIns: []extensionsv1alpha1.DropIn{
+							{
+								Name: "override.conf",
+								Content: `[Service]
+LimitMEMLOCK=67108864
+LimitNOFILE=1048576`,
+							},
+						},
+					},
+				))
+				Expect(files).To(BeEmpty())
 			})
 		})
 	})
 })
+
 
 type multiPart struct {
 	contentType string
@@ -357,3 +428,4 @@ func encodeMemoryOneConfigurationIntoOsc(codec runtime.Codec, osc *extensionsv1a
 	}
 	return nil
 }
+
